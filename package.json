@@ -1,5 +1,5 @@
 {
-  "name": "@orale/cli",
+  "name": "orale-cli",
   "version": "0.1.0-alpha",
   "description": "Plan, dispatch, and orchestrate AI coding agents across parallel git worktrees.",
   "type": "module",
