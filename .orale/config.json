@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "storage": {
+    "adapter": "local-sqlite",
+    "path": ".orale/tasks.db"
+  },
+  "agent": {
+    "adapter": "claude-code",
+    "model": "sonnet"
+  },
+  "tracker": {
+    "adapter": "github"
+  },
+  "execution": {
+    "maxParallel": 3,
+    "worktreeDir": ".worktrees",
+    "preserveOnFailure": true
+  }
+}
