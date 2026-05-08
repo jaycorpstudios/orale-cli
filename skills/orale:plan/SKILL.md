@@ -25,7 +25,11 @@ Explore the codebase and clarify requirements with the user until you have a com
 - What are the constraints, edge cases, acceptance criteria?
 - Are there external dependencies (APIs, services, schema changes)?
 - Are there existing patterns or utilities to reuse?
-- What is the desired PR workflow? (one PR per task to main / one PR per task to an integration branch / a single final PR with all changes)
+- **PR strategy** — present all three options and wait for the user's explicit choice before continuing:
+  1. **PR per task → main** (`pr-per-task`) — each task gets its own PR directly to main. Best for small, independent features.
+  2. **PR per task → integration branch** (`pr-per-task-to-integration`) — each task PR targets an integration branch; the integration branch is later merged to main. Best for team review workflows.
+  3. **Local integration branch — one final PR** (`local-integration`) — all tasks commit on a shared branch; a single combined PR is opened at the end. Best for large features or a clean history.
+  If option 2 or 3: also ask for the integration branch name (e.g. `integration/auth-rework`).
 
 Read relevant source files. Ask focused questions — one topic at a time, not a wall of questions. Do not proceed to Phase 2 until you fully understand the work.
 
@@ -50,7 +54,7 @@ What is explicitly in scope and out of scope.
 ## Technical Approach
 How the feature will be implemented at a high level.
 
-**PR Workflow:** [pr-per-task (default) | pr-per-task-to-integration (integration branch: `name`) | local-integration (one final PR)]
+**PR Workflow:** {strategy chosen by user — e.g. `pr-per-task` / `pr-per-task-to-integration` (integration branch: `name`) / `local-integration`}
 
 ## Files Affected
 | File | Change Type | Description |

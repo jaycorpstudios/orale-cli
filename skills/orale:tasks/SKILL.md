@@ -67,13 +67,22 @@ Use the answers to set `tracker_ticket` in each task.
 
 #### PR strategy
 
-Also ask the user:
+**Always ask — even if the plan already mentions a strategy. The plan's value is a suggestion, not a confirmed decision.**
+
+First, read the configured default and the plan's suggested strategy:
+
+```bash
+CONFIG_DEFAULT=$(cat .orale/config.json 2>/dev/null | jq -r '.execution.prStrategy // "pr-per-task"')
+```
+
+Then ask the user:
 
 > "What PR strategy should orale use for this feature?
+> (Configured default: **{CONFIG_DEFAULT}**. Plan suggests: **{strategy from plan if present}**.)
 >
-> **(1) PR per task → main** (default — good for small features or independent tasks)
-> **(2) PR per task → integration branch** (each task gets its own PR targeting an integration branch; team reviews individually before the integration branch is merged to main)
-> **(3) Local integration branch — one final PR** (all tasks commit locally on an integration branch; one PR is opened at the end with all changes combined — good for large features you want to keep in one review)
+> **(1) PR per task → main** — each task gets its own PR directly to main.
+> **(2) PR per task → integration branch** — each task PR targets an integration branch first; team reviews individually before merging to main.
+> **(3) Local integration branch — one final PR** — all tasks work on a shared branch; one combined PR at the end.
 >
 > If (2) or (3): what should the integration branch be named? (e.g. `integration/auth-rework`)"
 
