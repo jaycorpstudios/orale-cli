@@ -16,6 +16,7 @@ export const globalPaths = {
   data: join(xdgDataHome(), APP_NAME),
   db: join(xdgDataHome(), APP_NAME, 'orale.db'),
   skillsRoot: join(homedir(), '.claude', 'skills', APP_NAME),
+  skillsVersion: join(xdgConfigHome(), APP_NAME, 'skills-version'),
 } as const;
 
 export function projectPaths(projectRoot: string) {
@@ -27,5 +28,6 @@ export function projectPaths(projectRoot: string) {
     db: join(oraleDir, 'tasks.db'),
     logsDir: join(oraleDir, 'logs'),
     installedSkillsDir: join(projectRoot, '.claude', 'skills', APP_NAME),
+    skillsVersion: join(oraleDir, 'skills-version'),
   } as const;
 }

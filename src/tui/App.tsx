@@ -8,6 +8,7 @@ import { Header } from './components/Header.js';
 import { KeyboardHandler } from './components/KeyboardHandler.js';
 import { NotificationBar } from './components/Notification.js';
 import { StatusBar } from './components/StatusBar.js';
+import { TitleBar } from './components/TitleBar.js';
 import { usePrPolling } from './hooks/usePrPolling.js';
 import { useTaskPolling } from './hooks/useTaskPolling.js';
 import { HelpScreen } from './screens/Help.js';
@@ -88,6 +89,7 @@ function OraleApp({ storage, tracker }: AppProps) {
         <SplashScreen onComplete={onSplashComplete} durationMs={1800} />
       ) : (
         <>
+          <TitleBar />
           <Header
             projectRoot={projectRoot}
             storageAdapter={config?.storage.adapter ?? 'local-sqlite'}

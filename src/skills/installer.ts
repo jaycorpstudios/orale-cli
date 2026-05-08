@@ -24,8 +24,8 @@ interface SkillManifest {
  *
  * @param targetDir - The `.claude/skills` directory inside the project.
  */
-export async function installer(targetDir: string): Promise<void> {
-  await mkdir(targetDir, { recursive: true });
+export async function installer(skillsDir: string, versionFilePath: string): Promise<void> {
+  await mkdir(skillsDir, { recursive: true });
 
   let manifest: SkillManifest;
   try {
@@ -39,9 +39,9 @@ export async function installer(targetDir: string): Promise<void> {
 
   for (const skillName of manifest.skills) {
     // Source: skills/orale:plan/SKILL.md
-    // Target: <targetDir>/orale:plan/SKILL.md
+    // Target: <skillsDir>/orale:plan/SKILL.md
     const srcSkillDir = join(SKILLS_SOURCE_DIR, skillName);
-    const dstSkillDir = join(targetDir, skillName);
+    const dstSkillDir = join(skillsDir, skillName);
 
     await mkdir(dstSkillDir, { recursive: true });
 
@@ -51,12 +51,13 @@ export async function installer(targetDir: string): Promise<void> {
     }
   }
 
-  await writeFile(join(targetDir, '.installed-version'), manifest.version);
+  await mkdir(dirname(versionFilePath), { recursive: true });
+  await writeFile(versionFilePath, manifest.version);
 }
 
-export async function getInstalledVersion(targetDir: string): Promise<string | null> {
+export async function getInstalledVersion(versionFilePath: string): Promise<string | null> {
   try {
-    return (await readFile(join(targetDir, '.installed-version'), 'utf8')).trim();
+    return (await readFile(versionFilePath, 'utf8')).trim();
   } catch {
     return null;
   }

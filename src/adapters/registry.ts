@@ -72,14 +72,8 @@ export async function createDefaultRegistry(config: ResolvedConfig): Promise<Ada
   registry.registerStorage('obsidian', (cfg) => new ObsidianStorageAdapter(cfg));
   registry.registerStorage('local-json', (cfg) => new LocalJsonStorageAdapter(cfg));
 
-  // Try to load SQLite (optional dep)
-  try {
-    const { LocalSqliteStorageAdapter } = await import('./storage/local-sqlite.js');
-    registry.registerStorage('local-sqlite', (cfg) => new LocalSqliteStorageAdapter(cfg));
-  } catch {
-    // Fall back to local-json if better-sqlite3 not available
-    registry.registerStorage('local-sqlite', (cfg) => new LocalJsonStorageAdapter(cfg));
-  }
+  const { LocalSqliteStorageAdapter } = await import('./storage/local-sqlite.js');
+  registry.registerStorage('local-sqlite', (cfg) => new LocalSqliteStorageAdapter(cfg));
 
   // Agent adapters
   const { ClaudeCodeAgentAdapter } = await import('./agent/claude-code.js');

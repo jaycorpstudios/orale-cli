@@ -1,5 +1,8 @@
+import { cwd } from 'node:process';
 import type { Command } from 'commander';
 import { execa } from 'execa';
+import { projectPaths } from '../../config/paths.js';
+import { getAvailableVersion, getInstalledVersion } from '../../skills/installer.js';
 
 interface Check {
   name: string;
@@ -67,6 +70,27 @@ const CHECKS: Check[] = [
     name: 'claude (Claude Code CLI)',
     description: 'Required for AI agent execution',
     check: () => checkCommand('claude', ['--version']),
+  },
+  {
+    name: 'orale skills',
+    description: 'Claude Code skills installed by orale init',
+    check: async () => {
+      const { skillsVersion } = projectPaths(cwd());
+      const [installed, available] = await Promise.all([
+        getInstalledVersion(skillsVersion),
+        getAvailableVersion(),
+      ]);
+      if (!installed) {
+        return { ok: false, detail: 'Not installed — run: orale init' };
+      }
+      const isUpToDate = installed === available;
+      return {
+        ok: isUpToDate,
+        detail: isUpToDate
+          ? `v${installed}`
+          : `v${installed} installed, v${available} available — run: orale init`,
+      };
+    },
   },
   {
     name: 'obsidian-cli',

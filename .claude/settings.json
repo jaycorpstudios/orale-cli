@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "npm run lint:fix"
+          },
+          {
+            "type": "command",
+            "command": "npm run typecheck"
           }
         ]
       }

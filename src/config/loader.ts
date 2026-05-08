@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { cwd } from 'node:process';
 import { ConfigError } from '../core/errors.js';
 import { globalPaths } from './paths.js';
@@ -120,6 +120,10 @@ export async function loadConfig(projectRoot?: string): Promise<{
   };
 
   applyEnvOverrides(resolved);
+
+  if (resolved.storage.path && root && !isAbsolute(resolved.storage.path)) {
+    resolved.storage.path = join(root, resolved.storage.path);
+  }
 
   return { config: resolved, projectRoot: root };
 }

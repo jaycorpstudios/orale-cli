@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
 import { globalPaths } from '../../config/paths.js';
 import type { ResolvedConfig } from '../../config/schema.js';
 import { AdapterError } from '../../core/errors.js';
@@ -10,10 +11,6 @@ import {
   type StorageCapabilities,
   type TaskFilter,
 } from './interface.js';
-
-// better-sqlite3 is an optional dependency — imported dynamically
-type Database = import('better-sqlite3').Database;
-type BetterSqlite3 = typeof import('better-sqlite3');
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -69,7 +66,7 @@ function rowToTask(row: Record<string, unknown>): Task {
   };
 }
 
-function taskToRow(task: Task | NewTask, now: string): Record<string, unknown> {
+function taskToRow(task: Task | NewTask, now: string): Record<string, string | number | null> {
   return {
     id: task.id,
     title: task.title,
@@ -103,7 +100,7 @@ export class LocalSqliteStorageAdapter extends BaseStorageAdapter {
   };
 
   private dbPath: string;
-  private db: Database | null = null;
+  private db: DatabaseSync | null = null;
 
   constructor(config: ResolvedConfig) {
     super();
@@ -112,8 +109,12 @@ export class LocalSqliteStorageAdapter extends BaseStorageAdapter {
 
   async init(): Promise<void> {
     await mkdir(join(this.dbPath, '..'), { recursive: true });
-    const BetterSqlite3 = (await import('better-sqlite3')).default as BetterSqlite3;
-    this.db = new BetterSqlite3(this.dbPath);
+    // Function() prevents esbuild from statically analyzing the import specifier;
+    // a plain import('node:sqlite') has its 'node:' prefix stripped by esbuild at build time
+    const { DatabaseSync: Ctor } = await (Function('return import("node:sqlite")')() as Promise<
+      typeof import('node:sqlite')
+    >);
+    this.db = new Ctor(this.dbPath);
     this.db.exec(SCHEMA);
   }
 
@@ -132,7 +133,7 @@ export class LocalSqliteStorageAdapter extends BaseStorageAdapter {
     this.db = null;
   }
 
-  private getDb(): Database {
+  private getDb(): DatabaseSync {
     if (!this.db) throw new AdapterError('local-sqlite', 'Not initialized — call init() first');
     return this.db;
   }
@@ -140,7 +141,7 @@ export class LocalSqliteStorageAdapter extends BaseStorageAdapter {
   async list(filter?: TaskFilter): Promise<Task[]> {
     const db = this.getDb();
     let sql = 'SELECT * FROM tasks WHERE 1=1';
-    const params: unknown[] = [];
+    const params: (string | number | null)[] = [];
 
     if (filter?.project) {
       sql += ' AND project = ?';
@@ -235,7 +236,8 @@ export class LocalSqliteStorageAdapter extends BaseStorageAdapter {
     const db = this.getDb();
     const results: Task[] = [];
 
-    const txn = db.transaction(() => {
+    db.exec('BEGIN');
+    try {
       for (const { id, patch } of updates) {
         const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as
           | Record<string, unknown>
@@ -257,9 +259,12 @@ export class LocalSqliteStorageAdapter extends BaseStorageAdapter {
         db.prepare(`UPDATE tasks SET ${setClauses} WHERE id = ?`).run(...values, id);
         results.push(updated);
       }
-    });
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
 
-    txn();
     return results;
   }
 }

@@ -7,7 +7,7 @@ import { globalPaths, projectPaths } from '../../config/paths.js';
 import type { ProjectConfig } from '../../config/schema.js';
 import { detectDefaultBranch } from '../../core/worktree.js';
 import { log } from '../../lib/logger.js';
-import { installer } from '../../skills/installer.js';
+import { getAvailableVersion, getInstalledVersion, installer } from '../../skills/installer.js';
 
 const BOLD = '\x1b[1m';
 const GREEN = '\x1b[32m';
@@ -66,13 +66,29 @@ async function ensureGitignore(projectRoot: string, entries: string[]): Promise<
 }
 
 async function installSkills(projectRoot: string, global_: boolean): Promise<void> {
-  // Skills go to .claude/skills/ (project-local) or ~/.claude/skills/ (global)
-  // Folder names like "orale:plan" give Claude Code the /orale:plan command
-  // without requiring the plugin/marketplace system.
+  const paths = projectPaths(projectRoot);
   const skillsDir = global_ ? globalPaths.skillsRoot : join(projectRoot, '.claude', 'skills');
+  const versionFilePath = global_ ? globalPaths.skillsVersion : paths.skillsVersion;
 
-  await installer(skillsDir);
-  log.success(`Installed orale skills to ${skillsDir}`);
+  const [installedVersion, availableVersion] = await Promise.all([
+    getInstalledVersion(versionFilePath),
+    getAvailableVersion(),
+  ]);
+
+  const isAlreadyUpToDate = installedVersion === availableVersion;
+  if (isAlreadyUpToDate) {
+    log.info(`orale skills already up to date (v${installedVersion})`);
+    return;
+  }
+
+  await installer(skillsDir, versionFilePath);
+
+  const isUpgrade = installedVersion !== null;
+  if (isUpgrade) {
+    log.success(`Updated orale skills: v${installedVersion} → v${availableVersion}`);
+  } else {
+    log.success(`Installed orale skills v${availableVersion} to ${skillsDir}`);
+  }
   log.info('Commands available: /orale:plan, /orale:tasks, /orale:review');
 }
 

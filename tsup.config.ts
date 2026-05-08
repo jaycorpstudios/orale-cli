@@ -7,10 +7,24 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  target: 'node20',
+  target: 'node22',
   outDir: 'dist',
   treeshake: true,
   esbuildOptions(options) {
     options.jsx = 'automatic';
+    // esbuild strips 'node:' prefix from built-ins — override with a plugin
+    // to keep 'node:sqlite' intact in the output so Node resolves it correctly
+    options.plugins = [
+      ...(options.plugins ?? []),
+      {
+        name: 'keep-node-prefix',
+        setup(build) {
+          build.onResolve({ filter: /^node:sqlite$/ }, () => ({
+            path: 'node:sqlite',
+            external: true,
+          }));
+        },
+      },
+    ];
   },
 });
