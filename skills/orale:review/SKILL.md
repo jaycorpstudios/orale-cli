@@ -24,12 +24,12 @@ The user runs `/orale:review` (optionally with a task ID: `/orale:review AUTH-00
 2. **Check for review comments**
    Run the orale CLI to address review comments:
    ```bash
-   orale run <task-id> --project $PWD --address-review-comments
+   npx orale-cli run <task-id> --project $PWD --address-review-comments
    ```
    
    Or if you want to check first:
    ```bash
-   orale tasks show <task-id>
+   npx orale-cli tasks show <task-id>
    ```
    Then check the `pr_url` field and verify with `gh pr view`.
 

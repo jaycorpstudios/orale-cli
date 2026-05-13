@@ -48,7 +48,7 @@ Format: `{PREFIX}-{NNN}` (e.g. `AUTH-001`, `AUTH-002`)
 
 To check existing prefixes in the current storage, run:
 ```bash
-orale tasks list --json | jq -r '.[].id' | sed 's/-[0-9]*//' | sort -u
+npx orale-cli tasks list --json | jq -r '.[].id' | sed 's/-[0-9]*//' | sort -u
 ```
 
 #### Batches and Dependencies
@@ -157,7 +157,7 @@ Construct a JSON array with one object per task:
 #### Call orale CLI
 
 ```bash
-orale tasks create-batch --json '<json-array>' --project $PROJECT_PATH
+npx orale-cli tasks create-batch --json '<json-array>' --project $PROJECT_PATH
 ```
 
 The `orale` CLI will use the storage adapter configured in `.orale/config.json` (default: local-sqlite).
@@ -214,8 +214,8 @@ Created {N} tasks:
   Tasks: {PREFIX}-001, {PREFIX}-002, ...
 
 To execute all tasks in dependency order:
-  orale run {comma-separated IDs} --project {PROJECT_PATH}
+  npx orale-cli run {comma-separated IDs} --project {PROJECT_PATH}
 
 To open the kanban dashboard:
-   orale
+   npx orale-cli
 ```
