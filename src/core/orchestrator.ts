@@ -109,12 +109,13 @@ export class Orchestrator {
     const startTime = Date.now();
     log.task(taskId, `Starting: ${task.title}`);
 
-    // Task-level pr_strategy overrides the run-level option
+    // Run-level strategy (from CLI --pr-strategy) overrides task-level pr_strategy field.
+    // Task field is only used as fallback when no run-level strategy was given.
     const effectiveStrategy: PrStrategy =
-      task.pr_strategy ?? prStrategyOpts?.strategy ?? this.config.execution.prStrategy;
+      prStrategyOpts?.strategy ?? task.pr_strategy ?? this.config.execution.prStrategy;
     const effectiveIntegrationBranch =
-      task.integration_branch ??
       prStrategyOpts?.integrationBranch ??
+      task.integration_branch ??
       this.config.execution.integrationBranch;
 
     const isLocalIntegration = effectiveStrategy === 'local-integration';
@@ -433,13 +434,10 @@ export class Orchestrator {
     }
 
     // ── Resolve effective PR strategy ─────────────────────────────────────────
-    // Priority: run option → first task's pr_strategy field → config default
-    const effectiveStrategy: PrStrategy =
-      optionStrategy ?? tasks[0]?.pr_strategy ?? this.config.execution.prStrategy;
+    // Priority: CLI run option → config default (task-level pr_strategy is applied per-task in executeTask)
+    const effectiveStrategy: PrStrategy = optionStrategy ?? this.config.execution.prStrategy;
     const effectiveIntegrationBranch =
-      optionIntegrationBranch ??
-      tasks[0]?.integration_branch ??
-      this.config.execution.integrationBranch;
+      optionIntegrationBranch ?? this.config.execution.integrationBranch;
 
     if (effectiveStrategy !== 'pr-per-task') {
       if (!effectiveIntegrationBranch) {
@@ -450,10 +448,29 @@ export class Orchestrator {
       }
       const mainBranch =
         this.config.execution.mainBranch ?? (await detectDefaultBranch(projectPath));
+
+      const isIntegrationSameAsMain = effectiveIntegrationBranch === mainBranch;
+      if (isIntegrationSameAsMain) {
+        log.error(
+          `Integration branch cannot be the same as main branch ("${mainBranch}"). Use a different branch name.`,
+        );
+        process.exit(1);
+      }
+
       await this.ensureIntegrationBranch(effectiveIntegrationBranch, mainBranch, projectPath);
       log.info(
         `Integration branch: ${effectiveIntegrationBranch} (strategy: ${effectiveStrategy})`,
       );
+
+      const isMultiBatch = batches.length > 1;
+      const isPrPerTaskToIntegration = effectiveStrategy === 'pr-per-task-to-integration';
+      if (isPrPerTaskToIntegration && isMultiBatch) {
+        log.warn(
+          `Strategy "pr-per-task-to-integration" with ${batches.length} batches requires manual PR merging between batches. ` +
+            `Batch 2+ tasks target the integration branch without previous batch PRs merged. ` +
+            `Consider "local-integration" for automatic dependency handling.`,
+        );
+      }
     }
 
     const prStrategyOpts =
@@ -485,15 +502,31 @@ export class Orchestrator {
         this.executeTask(task, projectPath, extraPrompt, prStrategyOpts),
       );
 
+      const batchLocalIds: string[] = [];
       for (const [task, ok] of results) {
         if (!ok) {
           failed.add(task.id);
         } else if (effectiveStrategy === 'local-integration') {
+          batchLocalIds.push(task.id);
           localIntegrationTaskIds.push(task.id);
         }
       }
 
       if (failed.size > 0) break; // Stop processing batches if any task failed
+
+      // For local-integration: merge this batch's branches into the integration branch
+      // before starting the next batch so dependent tasks start from the updated state.
+      const hasLocalBranches = batchLocalIds.length > 0;
+      if (effectiveStrategy === 'local-integration' && hasLocalBranches) {
+        const batchBranches = await this.collectBranchesFromIds(batchLocalIds);
+        if (batchBranches.length > 0) {
+          log.info(
+            `Merging batch ${batch.batchNumber} (${batchBranches.length} branch(es)) into ${effectiveIntegrationBranch}...`,
+          );
+          await this.mergeToIntegration(batchBranches, effectiveIntegrationBranch!, projectPath);
+          log.success(`Batch ${batch.batchNumber} merged — integration branch updated`);
+        }
+      }
     }
 
     if (failed.size > 0) {
@@ -502,21 +535,10 @@ export class Orchestrator {
     }
 
     // ── Local-integration post-processing ────────────────────────────────────
+    // Branches are already merged incrementally after each batch; only open the final PR.
     if (effectiveStrategy === 'local-integration' && localIntegrationTaskIds.length > 0) {
       const mainBranch =
         this.config.execution.mainBranch ?? (await detectDefaultBranch(projectPath));
-
-      // Collect branches from completed tasks
-      const branches: Array<{ taskId: string; branch: string }> = [];
-      for (const id of localIntegrationTaskIds) {
-        const updated = await this.storage.get(id);
-        if (updated?.branch_name) {
-          branches.push({ taskId: id, branch: updated.branch_name });
-        }
-      }
-
-      log.info(`Merging ${branches.length} branch(es) into ${effectiveIntegrationBranch}...`);
-      await this.mergeToIntegration(branches, effectiveIntegrationBranch!, projectPath);
 
       const featureTitle = tasks[0]?.feature || 'Integration';
       log.info(`Opening integration PR: ${effectiveIntegrationBranch} → ${mainBranch}`);
@@ -544,27 +566,72 @@ export class Orchestrator {
     log.success('All tasks completed successfully.');
   }
 
+  private async collectBranchesFromIds(
+    taskIds: string[],
+  ): Promise<Array<{ taskId: string; branch: string }>> {
+    const branches: Array<{ taskId: string; branch: string }> = [];
+    for (const id of taskIds) {
+      const task = await this.storage.get(id);
+      if (task?.branch_name) {
+        branches.push({ taskId: id, branch: task.branch_name });
+      }
+    }
+    return branches;
+  }
+
+  private async remoteBranchExists(branch: string, projectPath: string): Promise<boolean> {
+    try {
+      await execa('git', ['ls-remote', '--exit-code', '--heads', 'origin', branch], {
+        cwd: projectPath,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async ensureIntegrationBranch(
     integrationBranch: string,
     mainBranch: string,
     projectPath: string,
   ): Promise<void> {
-    try {
-      await execa('git', ['rev-parse', '--verify', integrationBranch], { cwd: projectPath });
-      log.info(`Integration branch "${integrationBranch}" already exists`);
+    const existsOnRemote = await this.remoteBranchExists(integrationBranch, projectPath);
+
+    if (existsOnRemote) {
+      log.info(`Integration branch "${integrationBranch}" already exists on remote`);
+      // Ensure a local tracking branch exists
+      try {
+        await execa('git', ['rev-parse', '--verify', integrationBranch], { cwd: projectPath });
+      } catch {
+        await execa(
+          'git',
+          ['branch', '--track', integrationBranch, `origin/${integrationBranch}`],
+          { cwd: projectPath },
+        );
+        log.info(`Set up local tracking branch for "${integrationBranch}"`);
+      }
       return;
-    } catch {
-      // doesn't exist — create it
     }
 
+    // Remote doesn't exist — ensure local branch exists
     try {
-      await execa('git', ['branch', integrationBranch, `origin/${mainBranch}`], {
-        cwd: projectPath,
-      });
+      await execa('git', ['rev-parse', '--verify', integrationBranch], { cwd: projectPath });
+      log.info(`Integration branch "${integrationBranch}" exists locally — pushing to remote`);
     } catch {
-      await execa('git', ['branch', integrationBranch, mainBranch], { cwd: projectPath });
+      // Doesn't exist locally either — create from origin/main or main
+      try {
+        await execa('git', ['branch', integrationBranch, `origin/${mainBranch}`], {
+          cwd: projectPath,
+        });
+      } catch {
+        await execa('git', ['branch', integrationBranch, mainBranch], { cwd: projectPath });
+      }
+      log.success(`Created integration branch "${integrationBranch}" from ${mainBranch}`);
     }
-    log.success(`Created integration branch "${integrationBranch}" from ${mainBranch}`);
+
+    // Push to remote and set upstream tracking
+    await execa('git', ['push', '-u', 'origin', integrationBranch], { cwd: projectPath });
+    log.success(`Pushed integration branch "${integrationBranch}" to remote`);
   }
 
   private async mergeToIntegration(
