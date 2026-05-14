@@ -5,6 +5,8 @@ interface Props {
   lines: string[];
   height?: number;
   title?: string;
+  scrollOffset?: number;
+  follow?: boolean;
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape code stripping
@@ -33,9 +35,11 @@ function renderLine(line: string, i: number) {
   );
 }
 
-export function LogPane({ lines, height = 20, title }: Props) {
-  // Show the last `height` lines
-  const visible = useMemo(() => lines.slice(-height), [lines, height]);
+export function LogPane({ lines, height = 20, title, scrollOffset = 0, follow = true }: Props) {
+  const visible = useMemo(
+    () => (follow ? lines.slice(-height) : lines.slice(scrollOffset, scrollOffset + height)),
+    [lines, height, follow, scrollOffset],
+  );
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -59,6 +63,12 @@ export function LogPane({ lines, height = 20, title }: Props) {
           <Text dimColor>No output yet…</Text>
         ) : (
           visible.map((line, i) => renderLine(line, i))
+        )}
+        {!follow && lines.length > height && (
+          <Text dimColor>
+            ↑↓ scroll · G end · {scrollOffset + 1}–{Math.min(scrollOffset + height, lines.length)}/
+            {lines.length}
+          </Text>
         )}
       </Box>
     </Box>

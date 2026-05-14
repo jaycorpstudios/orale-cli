@@ -1,5 +1,5 @@
-import { Box, type Key, Text, useStdin } from 'ink';
-import React, { useEffect, useCallback } from 'react';
+import { Box, type Key, Text, useStdin, useStdout } from 'ink';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { StorageAdapter } from '../../adapters/storage/interface.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { KeyboardHandler } from '../components/KeyboardHandler.js';
@@ -31,6 +31,8 @@ const STATUS_ICON: Record<string, string> = {
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠸', '⠴', '⠦', '⠇'];
 
+const DETAIL_CHROME = 19;
+
 export function TaskDetailScreen({ storage: _storage }: Props) {
   // Select by ID, not by task object reference, to avoid closure re-creation issues
   const selectedTaskId = useOraleStore((s) => s.selectedTaskId);
@@ -59,6 +61,25 @@ export function TaskDetailScreen({ storage: _storage }: Props) {
   const { isRawModeSupported } = useStdin();
 
   const { runTask, addressReviewComments } = useRunTask();
+
+  const { stdout } = useStdout();
+  const contentHeight = Math.max(3, (stdout?.rows ?? 24) - DETAIL_CHROME);
+
+  const [bodyScrollOffset, setBodyScrollOffset] = useState(0);
+  const [logScrollOffset, setLogScrollOffset] = useState(0);
+  const [logIsFollowing, setLogIsFollowing] = useState(true);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedTaskId is the trigger, setters are stable
+  useEffect(() => {
+    setBodyScrollOffset(0);
+    setLogScrollOffset(0);
+    setLogIsFollowing(true);
+  }, [selectedTaskId]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: detailTab is the trigger, setter is stable
+  useEffect(() => {
+    setBodyScrollOffset(0);
+  }, [detailTab]);
 
   // Tick timer — only re-creates interval if tickRuns changes (it won't: stable zustand action)
   useEffect(() => {
@@ -102,6 +123,33 @@ export function TaskDetailScreen({ storage: _storage }: Props) {
         setConfirm({ type: 'review', task, onConfirm: () => void addressReviewComments(task) });
         return;
       }
+      if (key.upArrow) {
+        if (detailTab === 'info') {
+          setBodyScrollOffset((o) => Math.max(0, o - 1));
+        } else {
+          setLogIsFollowing(false);
+          setLogScrollOffset((o) => Math.max(0, o - 1));
+        }
+        return;
+      }
+      if (key.downArrow) {
+        if (detailTab === 'info') {
+          const bodyLines = (task?.body ?? '').split('\n');
+          const maxOffset = Math.max(0, bodyLines.length - contentHeight);
+          setBodyScrollOffset((o) => Math.min(maxOffset, o + 1));
+        } else {
+          const maxOffset = Math.max(0, logs.length - contentHeight);
+          const next = Math.min(maxOffset, logScrollOffset + 1);
+          setLogScrollOffset(next);
+          const isAtEnd = next >= maxOffset;
+          if (isAtEnd) setLogIsFollowing(true);
+        }
+        return;
+      }
+      if (input === 'g' && detailTab === 'log') {
+        setLogIsFollowing(true);
+        return;
+      }
     },
     [
       confirmPending,
@@ -114,6 +162,9 @@ export function TaskDetailScreen({ storage: _storage }: Props) {
       runTask,
       addressReviewComments,
       addNotification,
+      logs,
+      logScrollOffset,
+      contentHeight,
     ],
   );
 
@@ -257,29 +308,54 @@ export function TaskDetailScreen({ storage: _storage }: Props) {
           borderColor="gray"
           paddingX={2}
           paddingY={1}
-          flexGrow={1}
+          height={contentHeight + 2}
           marginX={1}
+          overflow="hidden"
         >
           {task.body ? (
-            task.body.split('\n').map((line, i) => (
-              <Text
-                key={i}
-                bold={line.startsWith('## ')}
-                color={line.startsWith('## ') ? 'yellow' : undefined}
-                dimColor={
-                  !line.startsWith('## ') && !line.startsWith('- [') && !line.startsWith('1.')
-                }
-              >
-                {line}
-              </Text>
-            ))
+            (() => {
+              const bodyLines = task.body.split('\n');
+              const visibleLines = bodyLines.slice(
+                bodyScrollOffset,
+                bodyScrollOffset + contentHeight,
+              );
+              const hasOverflow = bodyLines.length > contentHeight;
+              return (
+                <>
+                  {visibleLines.map((line, i) => (
+                    <Text
+                      key={i}
+                      bold={line.startsWith('## ')}
+                      color={line.startsWith('## ') ? 'yellow' : undefined}
+                      dimColor={
+                        !line.startsWith('## ') && !line.startsWith('- [') && !line.startsWith('1.')
+                      }
+                    >
+                      {line}
+                    </Text>
+                  ))}
+                  {hasOverflow && (
+                    <Text dimColor>
+                      ↑↓ · {bodyScrollOffset + 1}–
+                      {Math.min(bodyScrollOffset + contentHeight, bodyLines.length)}/
+                      {bodyLines.length}
+                    </Text>
+                  )}
+                </>
+              );
+            })()
           ) : (
             <Text dimColor>No task body</Text>
           )}
         </Box>
       ) : (
-        <Box flexGrow={1} marginX={1}>
-          <LogPane lines={logs} />
+        <Box height={contentHeight + 2} marginX={1}>
+          <LogPane
+            lines={logs}
+            height={contentHeight}
+            scrollOffset={logScrollOffset}
+            follow={logIsFollowing}
+          />
         </Box>
       )}
 
