@@ -1,5 +1,6 @@
 import { Box, Text, useStdin } from 'ink';
 import React from 'react';
+import { VERSION } from '../../version.js';
 import { KeyboardHandler } from '../components/KeyboardHandler.js';
 import { useOraleStore } from '../store.js';
 
@@ -82,7 +83,9 @@ export function HelpScreen() {
       ))}
 
       <Box marginTop={1}>
-        <Text dimColor>orale v0.1.0 · Vim keys (hjkl) also work as secondary navigation</Text>
+        <Text
+          dimColor
+        >{`orale v${VERSION} · Vim keys (hjkl) also work as secondary navigation`}</Text>
       </Box>
     </Box>
   );

@@ -1,5 +1,6 @@
 import { Box, Text } from 'ink';
 import React, { useState, useEffect } from 'react';
+import { VERSION } from '../../version.js';
 
 // "ÓRALE!" in Unicode block characters — each row is one element of the array
 const LOGO_LINES = [
@@ -95,7 +96,7 @@ export function SplashScreen({ onComplete, durationMs = 2800 }: Props) {
 
       {/* Version */}
       <Box marginTop={1}>
-        <Text dimColor>v0.1.0</Text>
+        <Text dimColor>{`v${VERSION}`}</Text>
       </Box>
 
       {/* Loading indicator */}

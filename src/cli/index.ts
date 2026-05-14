@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { VERSION } from '../version.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerImportCommand } from './commands/import.js';
 import { registerInitCommand } from './commands/init.js';
@@ -12,7 +13,7 @@ const program = new Command();
 program
   .name('orale')
   .description('Plan, dispatch, and orchestrate AI coding agents across parallel git worktrees.')
-  .version('0.1.0');
+  .version(VERSION);
 
 registerInitCommand(program);
 registerDoctorCommand(program);
