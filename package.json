@@ -1,6 +1,6 @@
 {
   "name": "orale-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Plan, dispatch, and orchestrate AI coding agents across parallel git worktrees.",
   "type": "module",
   "engines": {
